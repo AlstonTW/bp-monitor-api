@@ -33,12 +33,14 @@ def read_bp():
     if not image_b64:
         return jsonify({'success': False, 'error': '未收到圖片'})
 
-    # ── 後端強制轉換成 JPEG（處理 HEIC/DNG/任何格式）──
+    # ── 後端強制轉換成 JPEG（處理 HEIC/DNG/任何格式 + 修正方向）──
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
         img_bytes = base64.b64decode(image_b64)
         img = Image.open(io.BytesIO(img_bytes))
-        # 轉成 RGB（避免 RGBA/P 模式問題）
+        # 自動修正 EXIF 旋轉（修復手機拍照方向問題）
+        img = ImageOps.exif_transpose(img)
+        # 轉成 RGB
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
         # 縮放到最大 1920px
@@ -47,7 +49,6 @@ def read_bp():
         if w > max_size or h > max_size:
             ratio = min(max_size/w, max_size/h)
             img = img.resize((int(w*ratio), int(h*ratio)), Image.LANCZOS)
-        # 輸出 JPEG
         buf = io.BytesIO()
         img.save(buf, format='JPEG', quality=92)
         image_b64  = base64.b64encode(buf.getvalue()).decode('utf-8')
