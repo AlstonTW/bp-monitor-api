@@ -322,20 +322,11 @@
 
   <div class="card">
     <div class="card-title">拍攝血壓計</div>
-    <div style="display:flex;gap:10px">
-      <button class="capture-btn" style="flex:2" onclick="document.getElementById('camera-input').click()">
-        <span class="icon">📷</span>
-        <span>拍照量測</span>
-      </button>
-      <button class="capture-btn" style="flex:1;background:linear-gradient(135deg,#2b6cb0,#2c5282);box-shadow:0 4px 20px rgba(43,108,176,0.35)" onclick="document.getElementById('upload-input').click()">
-        <span class="icon" style="font-size:1.2rem">🖼️</span>
-        <span style="font-size:0.82rem">上傳</span>
-      </button>
-    </div>
-    <!-- 拍照：強制開相機 -->
-    <input type="file" id="camera-input" accept="image/jpeg,image/jpg,image/png,image/webp" capture="environment" onchange="handlePhoto(this)">
-    <!-- 上傳：從相簿選取 -->
-    <input type="file" id="upload-input" accept="image/jpeg,image/jpg,image/png,image/webp" onchange="handlePhoto(this)">
+    <button class="capture-btn" onclick="document.getElementById('camera-input').click()">
+      <span class="icon">📷</span>
+      <span>拍照 / 上傳圖片</span>
+    </button>
+    <input type="file" id="camera-input" accept="image/jpeg,image/jpg,image/png,image/webp" onchange="handlePhoto(this)">
   </div>
 
   <!-- 載入中 -->
