@@ -72,7 +72,7 @@ def read_bp():
             }
         }
         r = req.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}",
             json=payload, timeout=30
         )
         if r.status_code == 429 and retry < 2:
