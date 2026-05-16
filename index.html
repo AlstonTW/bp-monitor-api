@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="血壓記錄">
+<title>血壓記錄</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  :root {
+    --red:    #e53e3e;
+    --orange: #dd6b20;
+    --green:  #2f855a;
+    --blue:   #2b6cb0;
+    --bg:     #f7f3ef;
+    --card:   #ffffff;
+    --text:   #1a1a2e;
+    --dim:    #718096;
+    --border: #e2d9d0;
+    --shadow: 0 2px 16px rgba(0,0,0,0.08);
+  }
+
+  body {
+    font-family: 'Georgia', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 100px;
+  }
+
+  /* 頂部 */
+  .header {
+    background: linear-gradient(135deg, #8b1a1a 0%, #c53030 100%);
+    color: white;
+    padding: 50px 20px 24px;
+    text-align: center;
+    position: relative;
+  }
+  .header h1 { font-size: 1.6rem; font-weight: normal; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .header p  { font-size: 0.82rem; opacity: 0.75; letter-spacing: 0.05em; }
+
+  /* 頁面切換 */
+  .tabs {
+    display: flex;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .tab {
+    flex: 1;
+    padding: 14px 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--dim);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.03em;
+  }
+  .tab.active { color: var(--red); border-bottom-color: var(--red); font-weight: bold; }
+
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* 卡片 */
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 0.72rem;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* 拍照按鈕 */
+  .capture-btn {
+    width: 100%;
+    padding: 20px;
+    background: linear-gradient(135deg, #8b1a1a, #c53030);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(197,48,48,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    font-family: Georgia, serif;
+  }
+  .capture-btn:active { transform: scale(0.97); box-shadow: 0 2px 10px rgba(197,48,48,0.25); }
+  .capture-btn .icon { font-size: 1.6rem; }
+
+  /* 相機輸入 */
+  #camera-input { display: none; }
+
+  /* 結果顯示 */
+  .bp-result {
+    display: none;
+    text-align: center;
+  }
+  .bp-values {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+  }
+  .bp-item {
+    flex: 1;
+    min-width: 80px;
+    padding: 16px 10px;
+    border-radius: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .bp-item .label { font-size: 0.62rem; color: var(--dim); letter-spacing: 0.06em; margin-bottom: 6px; }
+  .bp-item .value { font-size: 2rem; font-weight: bold; line-height: 1; }
+  .bp-item .unit  { font-size: 0.60rem; color: var(--dim); margin-top: 4px; }
+  .systolic  .value { color: var(--red); }
+  .diastolic .value { color: var(--orange); }
+  .pulse     .value { color: var(--blue); }
+
+  /* 血壓狀態標籤 */
+  .bp-status {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 14px;
+  }
+  .status-normal   { background: #c6f6d5; color: #2f855a; }
+  .status-elevated { background: #fefcbf; color: #744210; }
+  .status-high     { background: #fed7d7; color: #822727; }
+  .status-very-high{ background: #feb2b2; color: #63171b; }
+
+  /* 備註欄 */
+  .note-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-family: Georgia, serif;
+    color: var(--text);
+    background: var(--bg);
+    resize: none;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .note-input:focus { border-color: var(--red); }
+
+  /* 確認按鈕 */
+  .confirm-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    font-family: Georgia, serif;
+    transition: opacity 0.2s;
+  }
+  .confirm-btn:active { opacity: 0.85; }
+
+  .retry-btn {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-top: 8px;
+    font-family: Georgia, serif;
+  }
+
+  /* 成功動畫 */
+  .success-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(47,133,90,0.95);
+    z-index: 999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-align: center;
+  }
+  .success-overlay.show { display: flex; }
+  .success-icon { font-size: 5rem; margin-bottom: 16px; animation: pop 0.4s ease; }
+  .success-text { font-size: 1.3rem; letter-spacing: 0.08em; }
+  .success-sub  { font-size: 0.82rem; opacity: 0.8; margin-top: 8px; }
+  @keyframes pop { 0%{transform:scale(0.5);opacity:0} 80%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+
+  /* 歷史列表 */
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .history-date { font-size: 0.70rem; color: var(--dim); }
+  .history-vals { font-size: 1.05rem; font-weight: bold; flex: 1; }
+  .history-note { font-size: 0.65rem; color: var(--dim); }
+  .history-pulse { font-size: 0.72rem; color: var(--blue); }
+
+  /* 趨勢圖 */
+  .chart-wrap { position: relative; height: 200px; margin: 8px 0; }
+
+  /* 匯出按鈕 */
+  .export-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    font-family: Georgia, serif;
+    margin-bottom: 10px;
+    transition: opacity 0.2s;
+  }
+  .export-btn:active { opacity: 0.85; }
+  .export-btn.secondary {
+    background: transparent;
+    color: var(--blue);
+    border: 1px solid var(--blue);
+  }
+
+  /* 統計卡 */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-item { text-align: center; padding: 12px; background: var(--bg); border-radius: 10px; }
+  .stat-label { font-size: 0.60rem; color: var(--dim); letter-spacing: 0.05em; margin-bottom: 4px; }
+  .stat-value { font-size: 1.2rem; font-weight: bold; color: var(--text); }
+
+  /* 載入中 */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 24px;
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--red);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--dim);
+    font-size: 0.85rem;
+    line-height: 1.8;
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+  /* 圖片預覽 */
+  #preview-img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>❤️ 血壓記錄</h1>
+  <p>拍照自動識別・記錄健康數據</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('record')">📷 量測</div>
+  <div class="tab" onclick="switchTab('history')">📋 紀錄</div>
+  <div class="tab" onclick="switchTab('export')">📊 報告</div>
+</div>
+
+<!-- 量測頁 -->
+<div class="page active" id="page-record">
+
+  <div class="card">
+    <div class="card-title">拍攝血壓計</div>
+    <div style="display:flex;gap:10px">
+      <button class="capture-btn" style="flex:2" onclick="document.getElementById('camera-input').click()">
+        <span class="icon">📷</span>
+        <span>拍照量測</span>
+      </button>
+      <button class="capture-btn" style="flex:1;background:linear-gradient(135deg,#2b6cb0,#2c5282);box-shadow:0 4px 20px rgba(43,108,176,0.35)" onclick="document.getElementById('upload-input').click()">
+        <span class="icon" style="font-size:1.2rem">🖼️</span>
+        <span style="font-size:0.82rem">上傳</span>
+      </button>
+    </div>
+    <!-- 拍照：強制開相機 -->
+    <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handlePhoto(this)">
+    <!-- 上傳：從相簿選取 -->
+    <input type="file" id="upload-input" accept="image/*" onchange="handlePhoto(this)">
+  </div>
+
+  <!-- 載入中 -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    AI 識別中，請稍候...
+  </div>
+
+  <!-- 結果 -->
+  <div class="card" id="result-card" style="display:none">
+    <div class="card-title">識別結果</div>
+    <img id="preview-img" src="" alt="血壓計照片">
+
+    <div class="bp-result" id="bp-result">
+      <!-- 信心度提示（中等信心時顯示） -->
+      <div id="confidence-badge" style="display:none;margin-bottom:10px;padding:8px 12px;background:#fefcbf;border-radius:8px;font-size:0.75rem;color:#744210;line-height:1.5">
+        ⚠️ 部分數字辨識信心較低，請對照血壓計確認數值正確再儲存
+      </div>
+      <div class="bp-values">
+        <div class="bp-item systolic" onclick="editValue('sys','收縮壓（高壓）')">
+          <div class="label">收縮壓（高壓）✏️</div>
+          <div class="value" id="val-sys">--</div>
+          <div class="unit">mmHg</div>
+        </div>
+        <div class="bp-item diastolic" onclick="editValue('dia','舒張壓（低壓）')">
+          <div class="label">舒張壓（低壓）✏️</div>
+          <div class="value" id="val-dia">--</div>
+          <div class="unit">mmHg</div>
+        </div>
+        <div class="bp-item pulse" onclick="editValue('pul','脈搏')">
+          <div class="label">脈搏 ✏️</div>
+          <div class="value" id="val-pul">--</div>
+          <div class="unit">次/分</div>
+        </div>
+      </div>
+
+      <div class="bp-status" id="bp-status"></div>
+
+      <textarea class="note-input" id="note-input" rows="2" placeholder="備註（選填）：例如剛運動完、有吃藥..."></textarea>
+
+      <button class="confirm-btn" onclick="confirmRecord()">✅ 確認儲存</button>
+      <button class="retry-btn" onclick="retryPhoto()">🔄 重新拍照</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- 紀錄頁 -->
+<div class="page" id="page-history">
+  <div class="card">
+    <div class="card-title">血壓趨勢（近30筆）</div>
+    <div class="chart-wrap">
+      <canvas id="bp-chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">平均值</div>
+    <div class="stat-grid" id="stat-grid">
+      <div class="stat-item"><div class="stat-label">平均高壓</div><div class="stat-value" id="avg-sys">--</div></div>
+      <div class="stat-item"><div class="stat-label">平均低壓</div><div class="stat-value" id="avg-dia">--</div></div>
+      <div class="stat-item"><div class="stat-label">平均脈搏</div><div class="stat-value" id="avg-pul">--</div></div>
+      <div class="stat-item"><div class="stat-label">量測次數</div><div class="stat-value" id="total-count">0</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">量測紀錄</div>
+    <div id="history-list">
+      <div class="empty-state">
+        <div class="empty-icon">💊</div>
+        尚無量測紀錄<br>點「量測」拍照開始記錄
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 報告頁 -->
+<div class="page" id="page-export">
+  <div class="card">
+    <div class="card-title">匯出報告</div>
+    <p style="font-size:0.80rem;color:var(--dim);line-height:1.7;margin-bottom:16px">
+      將量測紀錄整理成報告，方便分享給家人或醫生參考。
+    </p>
+    <button class="export-btn" onclick="exportCSV()">📥 下載 CSV（可用 Excel 開啟）</button>
+    <button class="export-btn secondary" onclick="copyReport()">📋 複製文字報告</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">寫入 Apple Health</div>
+    <p style="font-size:0.80rem;color:var(--dim);line-height:1.7;margin-bottom:16px">
+      需要先在 iPhone「捷徑」APP 安裝血壓記錄捷徑，安裝後點下方按鈕。
+    </p>
+    <button class="export-btn" onclick="openHealthShortcut()" style="background:#ff2d55">
+      ❤️ 開啟 Apple Health 捷徑
+    </button>
+  </div>
+
+  <div class="card" id="preview-report-card">
+    <div class="card-title">報告預覽</div>
+    <div id="report-preview" style="font-size:0.72rem;color:var(--dim);line-height:1.8;font-family:monospace;white-space:pre-wrap;max-height:300px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 成功動畫 -->
+<div class="success-overlay" id="success-overlay" onclick="this.classList.remove('show')">
+  <div class="success-icon">✅</div>
+  <div class="success-text">記錄成功！</div>
+  <div class="success-sub" id="success-sub"></div>
+  <div style="margin-top:24px;font-size:0.75rem;opacity:0.6">點任意處關閉</div>
+</div>
+
+<script>
+const API_BASE = 'https://bp-monitor-api.onrender.com';
+
+// ── 資料儲存 ──
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem('bp_records') || '[]'); } catch(e) { return []; }
+}
+function saveRecords(records) {
+  localStorage.setItem('bp_records', JSON.stringify(records));
+}
+
+// ── Tab 切換 ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['record','history','export'][i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  if (tab === 'history') renderHistory();
+  if (tab === 'export')  renderReport();
+}
+
+// ── 拍照處理 ──
+let currentSys = 0, currentDia = 0, currentPul = 0, currentConfidence = "high";
+
+async function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // 顯示預覽
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const dataUrl = e.target.result;
+    document.getElementById('preview-img').src = dataUrl;
+    document.getElementById('preview-img').style.display = 'block';
+
+    // 若是拍照，自動儲存到手機
+    const isCameraCapture = document.getElementById('camera-input').files.length > 0 &&
+                             document.getElementById('camera-input').files[0] === file;
+    if (isCameraCapture) savePhotoToAlbum(dataUrl);
+  };
+  reader.readAsDataURL(file);
+
+  // 顯示載入
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('loading').innerHTML = `
+    <div class="spinner"></div>
+    <div>AI 識別中（雙重驗證，約 10-20 秒）...</div>
+    <div style="font-size:0.72rem;margin-top:6px;opacity:0.7">正在傳送圖片到伺服器...</div>
+  `;
+  document.getElementById('bp-result').style.display = 'none';
+
+  // 轉 base64
+  const b64 = await fileToBase64(file);
+
+  try {
+    // 送到後端（繞過 CORS）
+    const resp = await fetch(`${API_BASE}/api/read_bp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: b64,
+        type: getImageType(file),
+      })
+    });
+
+    const data = await resp.json();
+
+    if (!data.success) {
+      throw new Error(data.error || '識別失敗，請重新拍攝');
+    }
+
+    currentSys = data.sys;
+    currentDia = data.dia;
+    currentPul = data.pul;
+    currentConfidence = data.confidence || 'high';
+
+    showResult();
+  } catch(e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('loading').innerHTML = `<div class="spinner"></div>AI 識別中...`;
+    alert('⚠️ ' + e.message);
+    document.getElementById('result-card').style.display = 'none';
+  }
+
+  input.value = '';
+}
+
+function fileToBase64(file) {
+  // 強制轉成 JPEG（支援所有格式包含 DNG/HEIC）
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // 最大 1920px，保持比例
+        const maxSize = 1920;
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else       { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        // 轉成 JPEG base64
+        const jpegB64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+        resolve(jpegB64);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function getImageType(file) {
+  // 不管原始格式，一律回傳 image/jpeg（因為已轉換）
+  return 'image/jpeg';
+}
+
+function showResult() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('val-sys').textContent = currentSys;
+  document.getElementById('val-dia').textContent = currentDia;
+  document.getElementById('val-pul').textContent = currentPul;
+
+  // 血壓分類
+  const statusEl = document.getElementById('bp-status');
+  if (currentSys >= 180 || currentDia >= 120) {
+    statusEl.textContent = '⚠️ 高血壓危象，請立即就醫';
+    statusEl.className = 'bp-status status-very-high';
+  } else if (currentSys >= 140 || currentDia >= 90) {
+    statusEl.textContent = '🔴 高血壓（第2期）';
+    statusEl.className = 'bp-status status-high';
+  } else if (currentSys >= 130 || currentDia >= 80) {
+    statusEl.textContent = '🟡 高血壓（第1期）';
+    statusEl.className = 'bp-status status-elevated';
+  } else if (currentSys >= 120) {
+    statusEl.textContent = '🟡 血壓偏高';
+    statusEl.className = 'bp-status status-elevated';
+  } else {
+    statusEl.textContent = '🟢 血壓正常';
+    statusEl.className = 'bp-status status-normal';
+  }
+
+  // 顯示識別信心度
+  const confEl = document.getElementById('confidence-badge');
+  if (confEl) {
+    confEl.style.display = currentConfidence === 'high' ? 'none' : 'block';
+  }
+  document.getElementById('bp-result').style.display = 'block';
+  document.getElementById('note-input').value = '';
+}
+
+// ── 手動編輯數值 ──
+function editValue(field, label) {
+  const current = field === 'sys' ? currentSys : field === 'dia' ? currentDia : currentPul;
+  const newVal = prompt(`修正「${label}」的數值（目前：${current}）：`, current);
+  if (newVal === null) return;
+  const num = parseInt(newVal);
+  if (isNaN(num) || num <= 0) { alert('請輸入有效數字'); return; }
+
+  if (field === 'sys') {
+    currentSys = num;
+    document.getElementById('val-sys').textContent = num;
+  } else if (field === 'dia') {
+    currentDia = num;
+    document.getElementById('val-dia').textContent = num;
+  } else {
+    currentPul = num;
+    document.getElementById('val-pul').textContent = num;
+  }
+  // 重新評估血壓狀態
+  updateBpStatus();
+}
+
+function updateBpStatus() {
+  const statusEl = document.getElementById('bp-status');
+  if (!statusEl) return;
+  if (currentSys >= 180 || currentDia >= 120) {
+    statusEl.textContent = '⚠️ 高血壓危象，請立即就醫';
+    statusEl.className = 'bp-status status-very-high';
+  } else if (currentSys >= 140 || currentDia >= 90) {
+    statusEl.textContent = '🔴 高血壓（第2期）';
+    statusEl.className = 'bp-status status-high';
+  } else if (currentSys >= 130 || currentDia >= 80) {
+    statusEl.textContent = '🟡 高血壓（第1期）';
+    statusEl.className = 'bp-status status-elevated';
+  } else if (currentSys >= 120) {
+    statusEl.textContent = '🟡 血壓偏高';
+    statusEl.className = 'bp-status status-elevated';
+  } else {
+    statusEl.textContent = '🟢 血壓正常';
+    statusEl.className = 'bp-status status-normal';
+  }
+}
+
+// ── 儲存照片到手機相簿 ──
+function savePhotoToAlbum(dataUrl) {
+  try {
+    // 在 iOS Safari 上，建立 <a> 元素觸發下載會儲存到相簿
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `血壓_${new Date().toLocaleString('zh-TW',{
+      year:'numeric', month:'2-digit', day:'2-digit',
+      hour:'2-digit', minute:'2-digit', second:'2-digit'
+    }).replace(/[/:]/g,'-').replace(/\s/g,'_')}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch(e) {
+    console.log('[savePhoto] 無法儲存：', e.message);
+  }
+}
+
+function confirmRecord() {
+  const note = document.getElementById('note-input').value.trim();
+  const record = {
+    id: Date.now(),
+    date: new Date().toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }),
+    sys: currentSys,
+    dia: currentDia,
+    pul: currentPul,
+    note: note,
+  };
+
+  const records = loadRecords();
+  records.unshift(record);
+  saveRecords(records);
+
+  // 顯示成功
+  document.getElementById('success-sub').textContent =
+    `高壓 ${currentSys} / 低壓 ${currentDia} / 脈搏 ${currentPul}`;
+  document.getElementById('success-overlay').classList.add('show');
+
+  // 嘗試觸發 Apple Health 捷徑
+  triggerHealthShortcut(currentSys, currentDia, currentPul);
+
+  // 重置
+  setTimeout(() => {
+    document.getElementById('result-card').style.display = 'none';
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('success-overlay').classList.remove('show');
+  }, 3000);
+}
+
+function retryPhoto() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('camera-input').click();
+}
+
+// ── Apple Health 捷徑 ──
+function triggerHealthShortcut(sys, dia, pul) {
+  // 透過 URL scheme 喚起捷徑（需要使用者先安裝）
+  const url = `shortcuts://run-shortcut?name=血壓記錄&input={"sys":${sys},"dia":${dia},"pul":${pul}}`;
+  window.location.href = url;
+}
+
+function openHealthShortcut() {
+  const records = loadRecords();
+  if (!records.length) { alert('尚無量測紀錄'); return; }
+  const latest = records[0];
+  triggerHealthShortcut(latest.sys, latest.dia, latest.pul);
+}
+
+// ── 歷史紀錄 ──
+function getBpColor(sys, dia) {
+  if (sys >= 180 || dia >= 120) return '#63171b';
+  if (sys >= 140 || dia >= 90)  return '#e53e3e';
+  if (sys >= 120 || dia >= 80)  return '#dd6b20';
+  return '#2f855a';
+}
+
+function renderHistory() {
+  const records = loadRecords();
+  const listEl = document.getElementById('history-list');
+
+  if (!records.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💊</div>尚無量測紀錄<br>點「量測」拍照開始記錄</div>';
+    renderChart([]);
+    return;
+  }
+
+  // 統計
+  const avgSys = Math.round(records.reduce((s,r)=>s+r.sys,0)/records.length);
+  const avgDia = Math.round(records.reduce((s,r)=>s+r.dia,0)/records.length);
+  const avgPul = Math.round(records.reduce((s,r)=>s+r.pul,0)/records.length);
+  document.getElementById('avg-sys').textContent = avgSys;
+  document.getElementById('avg-dia').textContent = avgDia;
+  document.getElementById('avg-pul').textContent = avgPul;
+  document.getElementById('total-count').textContent = records.length;
+
+  // 列表
+  listEl.innerHTML = records.slice(0,30).map(r => `
+    <div class="history-item">
+      <div class="history-dot" style="background:${getBpColor(r.sys,r.dia)}"></div>
+      <div style="flex:1">
+        <div class="history-date">${r.date}</div>
+        <div class="history-vals" style="color:${getBpColor(r.sys,r.dia)}">${r.sys} / ${r.dia}</div>
+        ${r.note ? `<div class="history-note">${r.note}</div>` : ''}
+      </div>
+      <div class="history-pulse">💓 ${r.pul}</div>
+    </div>
+  `).join('');
+
+  renderChart(records.slice(0,30).reverse());
+}
+
+let bpChart = null;
+function renderChart(records) {
+  const ctx = document.getElementById('bp-chart').getContext('2d');
+  if (bpChart) { bpChart.destroy(); bpChart = null; }
+  if (!records.length) return;
+
+  const labels = records.map(r => r.date.slice(5,10));
+  bpChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '高壓',
+          data: records.map(r=>r.sys),
+          borderColor: '#e53e3e',
+          backgroundColor: 'rgba(229,62,62,0.08)',
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: '#e53e3e',
+          fill: true,
+        },
+        {
+          label: '低壓',
+          data: records.map(r=>r.dia),
+          borderColor: '#dd6b20',
+          backgroundColor: 'rgba(221,107,32,0.05)',
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: '#dd6b20',
+          fill: true,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { font: { size: 11 }, boxWidth: 12 } },
+        annotation: {
+          annotations: {
+            high: { type:'line', yMin:140, yMax:140, borderColor:'rgba(229,62,62,0.3)', borderDash:[4,4], label:{content:'高血壓線 140',display:true,position:'end',font:{size:9}} }
+          }
+        }
+      },
+      scales: {
+        y: { min: 50, suggestedMax: 180, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } }
+      }
+    }
+  });
+}
+
+// ── 匯出報告 ──
+function generateReportText() {
+  const records = loadRecords();
+  if (!records.length) return '';
+  const avgSys = Math.round(records.reduce((s,r)=>s+r.sys,0)/records.length);
+  const avgDia = Math.round(records.reduce((s,r)=>s+r.dia,0)/records.length);
+  const avgPul = Math.round(records.reduce((s,r)=>s+r.pul,0)/records.length);
+  const lines = [
+    '═══════════════════════',
+    '     血壓量測報告',
+    `     產生時間：${new Date().toLocaleString('zh-TW')}`,
+    '═══════════════════════',
+    `總量測次數：${records.length} 次`,
+    `平均高壓：${avgSys} mmHg`,
+    `平均低壓：${avgDia} mmHg`,
+    `平均脈搏：${avgPul} 次/分`,
+    '───────────────────────',
+    '量測紀錄：',
+    '',
+    ...records.map(r => `${r.date}  高壓:${r.sys}  低壓:${r.dia}  脈搏:${r.pul}${r.note ? '  備註:'+r.note : ''}`),
+    '',
+    '═══════════════════════',
+  ];
+  return lines.join('\n');
+}
+
+function renderReport() {
+  const text = generateReportText();
+  document.getElementById('report-preview').textContent = text || '（尚無紀錄）';
+}
+
+function copyReport() {
+  const text = generateReportText();
+  if (!text) { alert('尚無紀錄'); return; }
+  navigator.clipboard.writeText(text).then(() => alert('✅ 報告已複製到剪貼簿'));
+}
+
+function exportCSV() {
+  const records = loadRecords();
+  if (!records.length) { alert('尚無紀錄'); return; }
+  const header = '日期時間,高壓(mmHg),低壓(mmHg),脈搏(次/分),備註';
+  const rows = records.map(r => `${r.date},${r.sys},${r.dia},${r.pul},"${r.note||''}"`);
+  const csv = '\uFEFF' + [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `血壓記錄_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// 初始化
+renderHistory();
+</script>
+</body>
+</html>
